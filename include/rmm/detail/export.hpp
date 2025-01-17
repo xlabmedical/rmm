@@ -22,7 +22,15 @@
 #define RMM_HIDDEN    __attribute__((visibility("hidden")))
 #define RMM_NAMESPACE RMM_EXPORT rmm
 #else
+#if (defined(_WIN32) && defined(RMM_BUILD_SHARED_LIBS))
+#if defined(RMM_EXPORT_BUILDING)
+#define RMM_EXPORT __declspec(dllexport)
+#else
+#define RMM_EXPORT __declspec(dllimport)
+#endif
+#else
 #define RMM_EXPORT
+#endif
 #define RMM_HIDDEN
 #define RMM_NAMESPACE rmm
 #endif

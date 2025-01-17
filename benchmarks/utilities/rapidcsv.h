@@ -13,6 +13,10 @@
 
 #pragma once
 
+#if defined(_MSC_VER)
+#define NOMINMAX
+#endif
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -1014,6 +1018,9 @@ class Document {
     int lf      = 0;
 
     while (fileLength > 0) {
+#ifdef min
+#undef min
+#endif
       std::streamsize readLength = std::min(fileLength, bufLength);
       pStream.read(buffer.data(), readLength);
       for (int i = 0; i < readLength; ++i) {

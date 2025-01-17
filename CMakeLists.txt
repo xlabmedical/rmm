@@ -79,31 +79,41 @@ include(cmake/thirdparty/get_nvtx.cmake)
 
 # ##################################################################################################
 # * library targets --------------------------------------------------------------------------------
-
-add_library(rmm INTERFACE)
+add_library(rmm)
 add_library(rmm::rmm ALIAS rmm)
 
-target_include_directories(rmm INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-                                         "$<INSTALL_INTERFACE:include>")
+if(WIN32)
+  add_compile_definitions(NOMINMAX)
+  target_compile_definitions(rmm PUBLIC NOMINMAX)
+endif()
+
+target_include_directories(rmm PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+                                      "$<INSTALL_INTERFACE:include>")
 
 if(CUDA_STATIC_RUNTIME)
   message(STATUS "RMM: Enabling static linking of cudart")
-  target_link_libraries(rmm INTERFACE CUDA::cudart_static)
+  target_link_libraries(rmm PUBLIC CUDA::cudart_static)
 else()
-  target_link_libraries(rmm INTERFACE CUDA::cudart)
+  target_link_libraries(rmm PUBLIC CUDA::cudart)
 endif()
 
-target_link_libraries(rmm INTERFACE CCCL::CCCL)
-target_link_libraries(rmm INTERFACE spdlog::spdlog_header_only)
-target_link_libraries(rmm INTERFACE dl)
-target_link_libraries(rmm INTERFACE nvtx3::nvtx3-cpp)
-target_compile_features(rmm INTERFACE cxx_std_17 $<BUILD_INTERFACE:cuda_std_17>)
-target_compile_definitions(rmm INTERFACE LIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE)
+target_link_libraries(rmm PUBLIC CCCL::CCCL)
+target_link_libraries(rmm PUBLIC spdlog::spdlog_header_only)
+target_link_libraries(rmm PUBLIC $<$<NOT:$<PLATFORM_ID:Windows>>:dl>)
+target_link_libraries(rmm PUBLIC nvtx3::nvtx3-cpp)
+target_compile_features(rmm PUBLIC cxx_std_17 $<BUILD_INTERFACE:cuda_std_17>)
+target_compile_definitions(rmm PUBLIC LIBCUDACXX_ENABLE_EXPERIMENTAL_MEMORY_RESOURCE)
+if(BUILD_SHARED_LIBS)
+  target_compile_definitions(rmm PUBLIC RMM_BUILD_SHARED_LIBS)
+  target_compile_definitions(rmm PUBLIC $<BUILD_INTERFACE:RMM_EXPORT_BUILDING>)
+endif()
 
 # Enable NVTX if necessary
 if(RMM_NVTX)
-  target_compile_definitions(rmm INTERFACE RMM_NVTX)
+  target_compile_definitions(rmm PUBLIC RMM_NVTX)
 endif()
+
+add_subdirectory(src)
 
 # ##################################################################################################
 # * tests and benchmarks ---------------------------------------------------------------------------

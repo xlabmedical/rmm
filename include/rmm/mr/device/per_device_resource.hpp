@@ -116,48 +116,28 @@ namespace detail {
  *
  * @return Pointer to the static cuda_memory_resource used as the initial, default resource
  */
-RMM_EXPORT inline device_memory_resource* initial_resource()
-{
-  static cuda_memory_resource mr{};
-  return &mr;
-}
+RMM_EXPORT device_memory_resource* initial_resource();
 
 /**
  * @briefreturn{Reference to the lock}
  */
-RMM_EXPORT inline std::mutex& map_lock()
-{
-  static std::mutex map_lock;
-  return map_lock;
-}
+RMM_EXPORT std::mutex& map_lock();
 
 /**
  * @briefreturn{Reference to the map from device id -> resource}
  */
-RMM_EXPORT inline auto& get_map()
-{
-  static std::map<cuda_device_id::value_type, device_memory_resource*> device_id_to_resource;
-  return device_id_to_resource;
-}
+RMM_EXPORT auto get_map() -> std::map<cuda_device_id::value_type, device_memory_resource*>&;
 
 /**
  * @briefreturn{Reference to the lock}
  */
-RMM_EXPORT inline std::mutex& ref_map_lock()
-{
-  static std::mutex ref_map_lock;
-  return ref_map_lock;
-}
+RMM_EXPORT std::mutex& ref_map_lock();
 
 // This symbol must have default visibility, see: https://github.com/rapidsai/rmm/issues/826
 /**
  * @briefreturn{Reference to the map from device id -> resource_ref}
  */
-RMM_EXPORT inline auto& get_ref_map()
-{
-  static std::map<cuda_device_id::value_type, device_async_resource_ref> device_id_to_resource_ref;
-  return device_id_to_resource_ref;
-}
+RMM_EXPORT auto get_ref_map() -> std::map<cuda_device_id::value_type, device_async_resource_ref>&;
 
 }  // namespace detail
 
@@ -183,15 +163,7 @@ RMM_EXPORT inline auto& get_ref_map()
  * @param device_id The id of the target device
  * @return Pointer to the current `device_memory_resource` for device `device_id`
  */
-inline device_memory_resource* get_per_device_resource(cuda_device_id device_id)
-{
-  std::lock_guard<std::mutex> lock{detail::map_lock()};
-  auto& map = detail::get_map();
-  // If a resource was never set for `id`, set to the initial resource
-  auto const found = map.find(device_id.value());
-  return (found == map.end()) ? (map[device_id.value()] = detail::initial_resource())
-                              : found->second;
-}
+RMM_EXPORT device_memory_resource* get_per_device_resource(cuda_device_id device_id);
 
 namespace detail {
 
@@ -200,22 +172,8 @@ namespace detail {
 // `set_per_device_resource_ref` and the thread-safe version of `set_per_device_resource`,
 // both of which take the lock, so we need an implementation that doesn't take the lock.
 /// @private
-inline device_async_resource_ref set_per_device_resource_ref_unsafe(
-  cuda_device_id device_id, device_async_resource_ref new_resource_ref)
-{
-  auto& map          = detail::get_ref_map();
-  auto const old_itr = map.find(device_id.value());
-  // If a resource didn't previously exist for `device_id`, return pointer to initial_resource
-  // Note: because resource_ref is not default-constructible, we can't use std::map::operator[]
-  if (old_itr == map.end()) {
-    map.insert({device_id.value(), new_resource_ref});
-    return device_async_resource_ref{detail::initial_resource()};
-  }
-
-  auto old_resource_ref = old_itr->second;
-  old_itr->second       = new_resource_ref;  // update map directly via iterator
-  return old_resource_ref;
-}
+RMM_EXPORT device_async_resource_ref set_per_device_resource_ref_unsafe(
+  cuda_device_id device_id, device_async_resource_ref new_resource_ref);
 }  // namespace detail
 
 /**
@@ -245,25 +203,8 @@ inline device_async_resource_ref set_per_device_resource_ref_unsafe(
  * for `id`
  * @return Pointer to the previous memory resource for `id`
  */
-inline device_memory_resource* set_per_device_resource(cuda_device_id device_id,
-                                                       device_memory_resource* new_mr)
-{
-  std::lock_guard<std::mutex> lock{detail::map_lock()};
-
-  // Note: even though set_per_device_resource() and set_per_device_resource_ref() are not
-  // interchangeable, we call the latter from the former to maintain resource_ref
-  // state consistent with the resource pointer state. This is necessary because the
-  // Python API still uses the raw pointer API. Once the Python API is updated to use
-  // resource_ref, this call can be removed.
-  detail::set_per_device_resource_ref_unsafe(device_id, new_mr);
-
-  auto& map          = detail::get_map();
-  auto const old_itr = map.find(device_id.value());
-  // If a resource didn't previously exist for `id`, return pointer to initial_resource
-  auto* old_mr           = (old_itr == map.end()) ? detail::initial_resource() : old_itr->second;
-  map[device_id.value()] = (new_mr == nullptr) ? detail::initial_resource() : new_mr;
-  return old_mr;
-}
+RMM_EXPORT device_memory_resource* set_per_device_resource(cuda_device_id device_id,
+                                                           device_memory_resource* new_mr);
 
 /**
  * @brief Get the memory resource for the current device.
@@ -286,10 +227,7 @@ inline device_memory_resource* set_per_device_resource(cuda_device_id device_id,
  *
  * @return Pointer to the resource for the current device
  */
-inline device_memory_resource* get_current_device_resource()
-{
-  return get_per_device_resource(rmm::get_current_cuda_device());
-}
+RMM_EXPORT device_memory_resource* get_current_device_resource();
 
 /**
  * @brief Set the memory resource for the current device.
@@ -315,10 +253,7 @@ inline device_memory_resource* get_current_device_resource()
  * @param new_mr If not `nullptr`, pointer to new resource to use for the current device
  * @return Pointer to the previous resource for the current device
  */
-inline device_memory_resource* set_current_device_resource(device_memory_resource* new_mr)
-{
-  return set_per_device_resource(rmm::get_current_cuda_device(), new_mr);
-}
+RMM_EXPORT device_memory_resource* set_current_device_resource(device_memory_resource* new_mr);
 
 /**
  * @brief Get the `device_async_resource_ref` for the specified device.
@@ -342,18 +277,7 @@ inline device_memory_resource* set_current_device_resource(device_memory_resourc
  * @param device_id The id of the target device
  * @return The current `device_async_resource_ref` for device `device_id`
  */
-inline device_async_resource_ref get_per_device_resource_ref(cuda_device_id device_id)
-{
-  std::lock_guard<std::mutex> lock{detail::ref_map_lock()};
-  auto& map = detail::get_ref_map();
-  // If a resource was never set for `id`, set to the initial resource
-  auto const found = map.find(device_id.value());
-  if (found == map.end()) {
-    auto item = map.insert({device_id.value(), detail::initial_resource()});
-    return item.first->second;
-  }
-  return found->second;
-}
+RMM_EXPORT device_async_resource_ref get_per_device_resource_ref(cuda_device_id device_id);
 
 /**
  * @brief Set the `device_async_resource_ref` for the specified device to `new_resource_ref`
@@ -379,12 +303,8 @@ inline device_async_resource_ref get_per_device_resource_ref(cuda_device_id devi
  * @param new_resource_ref new `device_async_resource_ref` to use as new resource for `device_id`
  * @return The previous `device_async_resource_ref` for `device_id`
  */
-inline device_async_resource_ref set_per_device_resource_ref(
-  cuda_device_id device_id, device_async_resource_ref new_resource_ref)
-{
-  std::lock_guard<std::mutex> lock{detail::ref_map_lock()};
-  return detail::set_per_device_resource_ref_unsafe(device_id, new_resource_ref);
-}
+RMM_EXPORT device_async_resource_ref
+set_per_device_resource_ref(cuda_device_id device_id, device_async_resource_ref new_resource_ref);
 
 /**
  * @brief Get the `device_async_resource_ref` for the current device.
@@ -408,10 +328,7 @@ inline device_async_resource_ref set_per_device_resource_ref(
  *
  * @return `device_async_resource_ref` active for the current device
  */
-inline device_async_resource_ref get_current_device_resource_ref()
-{
-  return get_per_device_resource_ref(rmm::get_current_cuda_device());
-}
+RMM_EXPORT device_async_resource_ref get_current_device_resource_ref();
 
 /**
  * @brief Set the `device_async_resource_ref` for the current device.
@@ -434,11 +351,8 @@ inline device_async_resource_ref get_current_device_resource_ref()
  * @param new_resource_ref New `device_async_resource_ref` to use for the current device
  * @return Previous `device_async_resource_ref` for the current device
  */
-inline device_async_resource_ref set_current_device_resource_ref(
-  device_async_resource_ref new_resource_ref)
-{
-  return set_per_device_resource_ref(rmm::get_current_cuda_device(), new_resource_ref);
-}
+RMM_EXPORT device_async_resource_ref
+set_current_device_resource_ref(device_async_resource_ref new_resource_ref);
 
 /**
  * @brief Reset the `device_async_resource_ref` for the specified device to the initial resource.
@@ -456,10 +370,7 @@ inline device_async_resource_ref set_current_device_resource_ref(
  * @param device_id The id of the target device
  * @return Previous `device_async_resource_ref` for `device_id`
  */
-inline device_async_resource_ref reset_per_device_resource_ref(cuda_device_id device_id)
-{
-  return set_per_device_resource_ref(device_id, detail::initial_resource());
-}
+RMM_EXPORT device_async_resource_ref reset_per_device_resource_ref(cuda_device_id device_id);
 
 /**
  * @brief Reset the `device_async_resource_ref` for the current device to the initial resource.
@@ -474,10 +385,7 @@ inline device_async_resource_ref reset_per_device_resource_ref(cuda_device_id de
  *
  * @return Previous `device_async_resource_ref` for `device_id`
  */
-inline device_async_resource_ref reset_current_device_resource_ref()
-{
-  return reset_per_device_resource_ref(rmm::get_current_cuda_device());
-}
+RMM_EXPORT device_async_resource_ref reset_current_device_resource_ref();
 /** @} */  // end of group
 }  // namespace mr
 }  // namespace RMM_NAMESPACE

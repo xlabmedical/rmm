@@ -20,8 +20,6 @@
 
 #include <cuda_runtime_api.h>
 
-#include <dlfcn.h>
-
 #include <memory>
 #include <optional>
 

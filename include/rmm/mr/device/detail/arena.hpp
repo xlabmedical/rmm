@@ -32,6 +32,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -116,7 +117,7 @@ inline std::size_t align_to_size_class(std::size_t value) noexcept
   };
   // NOLINTEND(readability-magic-numbers,cppcoreguidelines-avoid-magic-numbers)
 
-  auto* bound = std::lower_bound(size_classes.begin(), size_classes.end(), value);
+  auto bound = std::lower_bound(size_classes.begin(), size_classes.end(), value);
   RMM_LOGGING_ASSERT(bound != size_classes.end());
   return *bound;
 }
@@ -258,9 +259,9 @@ inline bool block_size_compare(block const& lhs, block const& rhs)
 class superblock final : public byte_span {
  public:
   /// Minimum size of a superblock (1 MiB).
-  static constexpr std::size_t minimum_size{1UL << 20};
+  static constexpr std::size_t minimum_size{1ULL << 20};
   /// Maximum size of a superblock (1 TiB), as a sanity check.
-  static constexpr std::size_t maximum_size{1UL << 40};
+  static constexpr std::size_t maximum_size{1ULL << 40};
 
   /**
    * @brief Construct a default superblock.
@@ -365,7 +366,7 @@ class superblock final : public byte_span {
     RMM_LOGGING_ASSERT(is_valid());
     RMM_LOGGING_ASSERT(empty() && bytes >= minimum_size && size() >= bytes + minimum_size);
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    return {superblock{pointer(), bytes}, superblock{pointer() + bytes, size() - bytes}};
+    return std::make_pair(superblock{pointer(), bytes}, superblock{pointer() + bytes, size() - bytes});
   }
 
   /**
@@ -627,7 +628,7 @@ class global_arena final {
     std::lock_guard lock(mtx_);
 
     block const blk{ptr, bytes};
-    auto const iter = std::find_if(superblocks_.cbegin(),
+    auto iter = std::find_if(superblocks_.cbegin(),
                                    superblocks_.cend(),
                                    [&](auto const& sblk) { return sblk.contains(blk); });
     if (iter == superblocks_.cend()) { return false; }
@@ -753,12 +754,12 @@ class global_arena final {
     RMM_LOGGING_ASSERT(sblk.is_valid());
 
     // Find the right place (in ascending address order) to insert the block.
-    auto const next     = superblocks_.lower_bound(sblk);
-    auto const previous = next == superblocks_.cbegin() ? next : std::prev(next);
+    auto next     = superblocks_.lower_bound(sblk);
+    auto previous = next == superblocks_.begin() ? next : std::prev(next);
 
     // Coalesce with neighboring blocks.
-    bool const merge_prev = previous != superblocks_.cend() && previous->is_contiguous_before(sblk);
-    bool const merge_next = next != superblocks_.cend() && sblk.is_contiguous_before(*next);
+    bool merge_prev = previous != superblocks_.end() && previous->is_contiguous_before(sblk);
+    bool merge_next = next != superblocks_.end() && sblk.is_contiguous_before(*next);
 
     if (merge_prev && merge_next) {
       auto prev_sb = std::move(superblocks_.extract(previous).value());

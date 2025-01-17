@@ -27,6 +27,15 @@
 #include <filesystem>
 #include <thread>
 
+#ifdef _WIN32
+void setenv(char const* name, char const* value, int v) { _putenv_s(name, value); }
+void unsetenv(char const* name) { _putenv_s(name, ""); }
+char* mkdtemp(char* nameTemplate) { return _mktemp(nameTemplate); }
+constexpr auto line_ending = "\r\n";
+#else
+constexpr auto line_ending = '\r';
+#endif
+
 namespace rmm::test {
 namespace {
 
@@ -78,7 +87,7 @@ class raii_temp_directory {
 
   [[nodiscard]] std::string generate_path(std::string filename) const
   {
-    return directory_path_ / filename;
+    return (directory_path_ / filename).string();
   }
 
  private:
@@ -288,7 +297,7 @@ TEST(Adaptor, STDOUT)
   log_mr.deallocate(ptr, size);
 
   std::string output = testing::internal::GetCapturedStdout();
-  std::string header = output.substr(0, output.find('\n'));
+  std::string header = output.substr(0, output.find(line_ending));
   ASSERT_EQ(header, log_mr.header());
 }
 
@@ -306,7 +315,7 @@ TEST(Adaptor, STDERR)
   log_mr.deallocate(ptr, size);
 
   std::string output = testing::internal::GetCapturedStderr();
-  std::string header = output.substr(0, output.find('\n'));
+  std::string header = output.substr(0, output.find(line_ending));
   ASSERT_EQ(header, log_mr.header());
 }
 
